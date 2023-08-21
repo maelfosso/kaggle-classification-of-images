@@ -25,25 +25,26 @@ def split_dataset():
     df_valid.to_csv("./inputs/valid.csv", index=False)
     df_test.to_csv("./inputs/test.csv", index=False)
 
-def load_and_preproces_image(x):
-    image_path = os.path.join(os.getcwd(), "dataset/Train Images", x.numpy().decode("utf-8"))
-    image_raw = tf.io.read_file(image_path)
-    image = tf.image.decode_image(image_raw)
-    image = tf.image.resize(image, [235, 80]) # resize to max height and max width
-    image = image / 255.
-    return image
+def load_and_preproces_image(x, y):
+    image_raw = tf.io.read_file(x)
+    image = tf.image.decode_image(image_raw, expand_animations = False, channels=3)
+    image = tf.image.resize(image, [235, 80])
+    image = tf.cast(image, tf.float32) / 255.
+    return tf.data.Dataset.from_tensors((image, y))
 
 def dataframe_to_tf_dataset(df):
-    ds = tf.data.Dataset.from_tensor_slices((df.Image, df.Class))
+    ds = tf.data.Dataset.from_tensor_slices((
+        df.Image.apply(lambda i: os.path.join(os.getcwd(), "dataset/Train Images", i)), # x.numpy().decode("utf-8"))),
+        df.Class.replace({"Food": 0, "Attire": 1, "misc": 2, "Decorationandsignage": 3})
+    ))
 
     n_readers = 5
     ds = ds.interleave(
-        lambda x, y: tf.data.Dataset.from_tensors(
-            (tf.py_function(load_and_preproces_image, [x], [tf.float32]), y)
-        ),
+        lambda x, y: load_and_preproces_image(x, y),
         cycle_length=n_readers,
         num_parallel_calls=tf.data.AUTOTUNE
     )
+
     return ds
 
 def create_tf_dataset():
